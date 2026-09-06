@@ -43,11 +43,24 @@
     min-height:100vh;
     overflow-x:hidden;
   }
+  /* Фон ВСЕЙ страницы — сплит из фирменной гаммы: слева белый
+     (--split-left), справа тёмно-серый (--split-right). Слой прибит
+     к вьюпорту (position:fixed), поэтому граница всегда проходит ровно
+     по центру ЭКРАНА — при любой ширине окна и любом масштабе (зум
+     браузера, десктоп, планшет). Раньше сплит красил только колонку
+     контента шириной 480px, и на широком окне по бокам торчал общий
+     тёмный фон — теперь боковые поля тоже в цвете. Сама колонка .app
+     накрывает центр своим тёмным фоном, так что видны только поля. */
+  body::before{
+    content:"";
+    position:fixed; inset:0; z-index:-1;
+    background:linear-gradient(to right, var(--split-left) 0 50%, var(--split-right) 50% 100%);
+  }
 
   /* ============ SPLASH ============ */
   #splash{
     position:fixed; inset:0; z-index:100;
-    background:var(--bg);
+    background:linear-gradient(to right, var(--split-left) 0 50%, var(--split-right) 50% 100%);
     display:flex; align-items:center; justify-content:center;
     opacity:1;
     animation: splashOut .4s ease forwards;
@@ -516,6 +529,24 @@
   }
   .cart-total{ display:flex; justify-content:space-between; align-items:center; padding:8px 2px 4px 2px; font-weight:800; font-size:14px; border-top:1px solid var(--line); margin-top:2px; }
   .cart-total .v{ color:var(--acc); }
+
+  /* ============ минимальная сумма заказа ============ */
+  /* Строка под поиском — видна всегда, ещё до того как человек
+     что-то положил в корзину. */
+  .min-order-note{
+    margin-top:9px; padding-top:9px; border-top:1px solid var(--line);
+    font-size:11.5px; color:var(--ink-soft); line-height:1.35;
+  }
+  .min-order-note b{ color:var(--ink); font-weight:800; }
+  /* Плашка в корзине, когда до минимума не хватает. */
+  .cart-warn{
+    margin:8px 0 0 0; padding:9px 11px;
+    border:1px solid var(--acc-line); border-radius:var(--radius-m);
+    background:var(--acc-soft); font-size:12px; line-height:1.4;
+  }
+  .cart-warn b{ font-weight:800; }
+  .modal-btn[disabled]{ opacity:.4; cursor:not-allowed; }
+  .modal-btn[disabled]:active{ transform:none; }
   .modal-actions{ display:flex; gap:6px; margin-top:12px; }
   .modal-btn{
     flex:1; padding:11px 4px; border-radius:var(--radius-m); border:1px solid var(--line);
@@ -566,6 +597,8 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <input class="search-input" id="searchInput" type="text" placeholder="Название или город…">
     </div>
+
+    <div class="min-order-note">⚠️ Минимальная сумма заказа — <b>200 ₽</b></div>
   </div>
 
   <div class="content" id="content"></div>
@@ -676,6 +709,10 @@ function mediaHTML(it){
   return `<img loading="lazy" referrerpolicy="no-referrer" src="${src}" alt="${esc(it.n)}" onerror="imgFail(this)">`;
 }
 
+/* Минимальная сумма заказа. Меняется одной строкой — правки нужны только
+   здесь, текст в шапке и в корзине подставляется автоматически. */
+const MIN_ORDER = 200;
+
 let state = { nav:'catalog', cat:'pony', query:'', visible:60 };
 let cartItems = [];
 
@@ -747,13 +784,16 @@ function openCart(){
         `).join('')}
       </div>
       <div class="cart-total"><span>Итого</span><span class="v">${total} ₽</span></div>
+      ${total < MIN_ORDER
+        ? `<div class="cart-warn">⚠️ Минимальная сумма заказа — <b>${MIN_ORDER} ₽</b>. Добавьте ещё на <b>${MIN_ORDER - total} ₽</b>, чтобы отправить заказ.</div>`
+        : ''}
       <div class="modal-actions">
         <button class="modal-btn" id="cartClearBtn">Очистить</button>
         <button class="modal-btn" id="cartCopyBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           Скопировать
         </button>
-        <button class="modal-btn primary" id="cartSendBtn">
+        <button class="modal-btn primary" id="cartSendBtn" ${total < MIN_ORDER ? 'disabled' : ''}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           Отправить
         </button>
@@ -779,6 +819,9 @@ function openCart(){
     });
 
     document.getElementById('cartSendBtn').addEventListener('click', ()=>{
+      // Страховка на случай, если кнопку каким-то образом нажмут при
+      // сумме ниже минимума (например, через инструменты разработчика).
+      if (cartItems.reduce((s,it)=> s + priceToNum(it.price), 0) < MIN_ORDER) return;
       // t.me/<username>?text=... открывает переписку с готовым текстом —
       // как в самом Telegram, так и в обычном браузере (там откроется
       // веб-версия или приложение). Внутри Mini App обычный window.open
@@ -788,7 +831,7 @@ function openCart(){
       else window.open(url, '_blank');
     });
   } else {
-    cartBody.innerHTML = `<div class="modal-empty">Корзина пока пуста — добавьте что-нибудь из каталога, пополнений или кейса.</div>`;
+    cartBody.innerHTML = `<div class="modal-empty">Корзина пока пуста — добавьте что-нибудь из каталога, пополнений или кейса.<br><br>Минимальная сумма заказа — <b>${MIN_ORDER} ₽</b>.</div>`;
   }
   cartOverlay.classList.add('show');
 }
@@ -1061,26 +1104,72 @@ function loadCaseState(){
       if (fromUrl) return fromUrl;
     }
   }catch(e){}
+  // Дальше по убыванию надёжности: localStorage переживает закрытие
+  // вкладки, sessionStorage — только обновление страницы, но зато его
+  // реже чистят встроенные браузеры. Берём первое, что нашлось.
+  for (const store of ['localStorage', 'sessionStorage']){
+    try{
+      const raw = window[store].getItem(CASE_STORAGE_KEY);
+      if (!raw) continue;
+      const s = JSON.parse(raw);
+      if (!s || !s.openedAt) continue;
+      return { openedAt: s.openedAt, prizeIdx: s.prizeIdx ?? null, claimed: !!s.claimed, spinning:false };
+    }catch(e){ /* хранилище недоступно — пробуем следующее */ }
+  }
+  return { openedAt:null, prizeIdx:null, claimed:false, spinning:false };
+}
+function caseStatePayload(){
+  return JSON.stringify({
+    openedAt: caseState.openedAt, prizeIdx: caseState.prizeIdx, claimed: caseState.claimed
+  });
+}
+/* Telegram CloudStorage — хранилище на стороне Telegram, привязанное к
+   аккаунту. Это единственный источник, который переживает и полное
+   закрытие мини-аппа, и очистку локального хранилища встроенным
+   браузером (именно из-за неё таймер иногда «слетал» после обновления
+   страницы). Работает асинхронно, поэтому читаем его сразу при старте
+   и, если там нашёлся более поздний запуск кейса, перерисовываем экран. */
+function cloudSaveCaseState(){
+  if (!(TG && TG.CloudStorage && TG.CloudStorage.setItem)) return;
+  try{ TG.CloudStorage.setItem(CASE_STORAGE_KEY, caseStatePayload(), function(){}); }catch(e){}
+}
+function cloudLoadCaseState(){
+  if (!(TG && TG.CloudStorage && TG.CloudStorage.getItem)) return;
   try{
-    const raw = localStorage.getItem(CASE_STORAGE_KEY);
-    if (!raw) return { openedAt:null, prizeIdx:null, claimed:false, spinning:false };
-    const s = JSON.parse(raw);
-    return { openedAt: s.openedAt ?? null, prizeIdx: s.prizeIdx ?? null, claimed: !!s.claimed, spinning:false };
-  }catch(e){ return { openedAt:null, prizeIdx:null, claimed:false, spinning:false }; }
+    TG.CloudStorage.getItem(CASE_STORAGE_KEY, function(err, raw){
+      if (err || !raw) return;
+      let s = null;
+      try{ s = JSON.parse(raw); }catch(e){ return; }
+      if (!s || !s.openedAt) return;
+      // Берём облако, только если там кейс открывали позже, чем знаем мы:
+      // так свежий локальный спин не затрётся старой записью с сервера.
+      if (!caseState.openedAt || s.openedAt > caseState.openedAt){
+        caseState.openedAt = s.openedAt;
+        caseState.prizeIdx = (s.prizeIdx === undefined) ? null : s.prizeIdx;
+        caseState.claimed = !!s.claimed;
+        syncCaseStateToUrl();
+        try{ localStorage.setItem(CASE_STORAGE_KEY, caseStatePayload()); }catch(e){}
+        if (state.nav === 'case') renderCase();
+      }
+    });
+  }catch(e){}
 }
 function saveCaseState(){
   syncCaseStateToUrl();
-  try{
-    localStorage.setItem(CASE_STORAGE_KEY, JSON.stringify({
-      openedAt: caseState.openedAt, prizeIdx: caseState.prizeIdx, claimed: caseState.claimed
-    }));
-  }catch(e){ /* localStorage недоступен (приватный режим и т.п.) — URL всё равно спасёт reload */ }
+  const payload = caseStatePayload();
+  try{ localStorage.setItem(CASE_STORAGE_KEY, payload); }catch(e){ /* приватный режим и т.п. */ }
+  // sessionStorage живёт до закрытия вкладки и не чистится теми браузерами,
+  // которые агрессивно подчищают localStorage — ещё один запасной путь,
+  // чтобы таймер точно пережил F5.
+  try{ sessionStorage.setItem(CASE_STORAGE_KEY, payload); }catch(e){}
+  cloudSaveCaseState();
 }
 let caseState = loadCaseState();
 // Если состояние нашлось только в ссылке (например, после reload), сразу
-// зеркалим его и в localStorage — так оно переживёт уже полное закрытие
-// вкладки, а не только обновление страницы.
+// зеркалим его во все остальные хранилища — так оно переживёт уже полное
+// закрытие вкладки, а не только обновление страницы.
 saveCaseState();
+cloudLoadCaseState();
 let caseTimer = null;
 
 function rnd(){
@@ -1265,53 +1354,43 @@ renderContent();
 
 setTimeout(()=>{ const s=document.getElementById('splash'); if (s) s.style.display='none'; }, 2300);
 
-/* ---------------- скрытая админ-панель ---------------- */
-// Набираешь на клавиатуре "administratorpanel" в любом месте страницы
-// (без фокуса на поле ввода) — всплывает панель со сбросом кулдауна
-// ежедневного кейса. Так же панель открывается, если зайти по ссылке
-// с ?admin=1 в конце — этим параметром бот помечает свою скрытую
-// команду, см. /administratorpanel в bot.py.
-(function adminPanel(){
-  const MAGIC = 'administratorpanel';
+/* ---------------- сброс кейса с клавиатуры ----------------
+   Печатаешь "resetcase" в любом месте страницы (не в поле ввода) —
+   кулдаун ежедневного кейса сбрасывается немедленно.
+   ВАЖНО: это не защищённый доступ, а просто клавиатурный ярлык.
+   Слово-триггер лежит в открытом виде в этом файле — любой, кто
+   откроет исходный код страницы (Ctrl+U / DevTools), увидит его и
+   сможет сбрасывать СЕБЕ кейс сколько угодно раз в день, обнуляя
+   смысл суточного лимита. Если нужна защита именно от пользователей
+   (а не просто быстрый способ для тебя сбросить свой же кейс при
+   тестировании) — сброс нужно делать на стороне бота, где код
+   никому не виден. */
+(function resetCaseHotkey(){
+  const MAGIC = 'resetcase';
   let buf = '';
-  let panelShown = false;
 
-  function buildPanel(){
-    if (panelShown) return;
-    panelShown = true;
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:fixed;left:14px;right:14px;bottom:104px;z-index:60;'
-      + 'background:var(--surface);border:1px solid var(--acc);border-radius:14px;'
-      + 'padding:12px 14px;box-shadow:0 10px 26px rgba(0,0,0,.5);font-size:12.5px;';
-    wrap.innerHTML = `
-      <div style="font-weight:800;margin-bottom:8px;">⚙️ Админ-панель</div>
-      <div style="color:var(--ink-soft);margin-bottom:10px;">Кулдаун кейса: ${caseState.openedAt ? 'активен' : 'нет'}</div>
-      <div style="display:flex;gap:8px;">
-        <button id="adminResetCase" style="flex:1;padding:9px;border-radius:10px;border:none;background:var(--acc);color:var(--acc-ink);font-weight:800;cursor:pointer;">Сбросить кейс</button>
-        <button id="adminClose" style="padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer;">✕</button>
-      </div>`;
-    document.body.appendChild(wrap);
-    document.getElementById('adminResetCase').addEventListener('click', ()=>{
-      caseState = { openedAt:null, prizeIdx:null, claimed:false, spinning:false };
-      saveCaseState();
-      if (state.nav === 'case') renderCase();
-      wrap.querySelector('div').textContent = '⚙️ Админ-панель — кейс сброшен ✓';
-    });
-    document.getElementById('adminClose').addEventListener('click', ()=>{
-      wrap.remove(); panelShown = false;
-    });
+  function toast(msg){
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = 'position:fixed;left:50%;bottom:104px;transform:translateX(-50%);'
+      + 'z-index:60;background:var(--surface);border:1px solid var(--acc);border-radius:12px;'
+      + 'padding:10px 16px;font-size:12.5px;font-weight:800;box-shadow:0 10px 26px rgba(0,0,0,.5);'
+      + 'pointer-events:none;';
+    document.body.appendChild(el);
+    setTimeout(()=> el.remove(), 1600);
   }
 
   document.addEventListener('keydown', (e)=>{
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     buf = (buf + (e.key || '')).slice(-MAGIC.length);
-    if (buf.toLowerCase() === MAGIC) buildPanel();
+    if (buf.toLowerCase() === MAGIC){
+      buf = '';
+      caseState = { openedAt:null, prizeIdx:null, claimed:false, spinning:false };
+      saveCaseState();
+      if (state.nav === 'case') renderCase();
+      toast('⚙️ Кейс сброшен ✓');
+    }
   });
-
-  try{
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin') === '1') buildPanel();
-  }catch(e){}
 })();
 
 </script>
