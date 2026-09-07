@@ -593,7 +593,28 @@ function shuffleInPlace(arr){
   }
   return arr;
 }
-Object.keys(CATALOG).forEach(k => shuffleInPlace(CATALOG[k]));
+function isAlicorn(item){
+  const n = (item && item.n) ? item.n : '';
+  if (n.indexOf('Луна-вселенной') !== -1) return false;
+  if (n.indexOf('Искорка') !== -1) return true;
+  if (n.indexOf('Селестия') !== -1) return true;
+  if (n.indexOf('Каденс') !== -1) return true;
+  if (n.indexOf('Флурри Харт') !== -1) return true;
+  if (n.indexOf('Луна') !== -1) return true;
+  return false;
+}
+function sortAlicornsFirst(arr){
+  const alicorns = [];
+  const rest = [];
+  for (let i = 0; i < arr.length; i++){
+    (isAlicorn(arr[i]) ? alicorns : rest).push(arr[i]);
+  }
+  arr.length = 0;
+  for (let i = 0; i < alicorns.length; i++) arr.push(alicorns[i]);
+  for (let i = 0; i < rest.length; i++) arr.push(rest[i]);
+  return arr;
+}
+Object.keys(CATALOG).forEach(k => sortAlicornsFirst(CATALOG[k]));
 const IMGBASE = 'https://dreamy-rugelach-1c5cc6.netlify.app/images/';
 
 const PALETTE = ['#2a2a2a','#26292f','#2e2a26','#2f2830','#262c2a','#2b2b31','#302c26','#252b2e'];
